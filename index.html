@@ -744,22 +744,25 @@ async function fetchKraken() {
   } catch(e){ showToast('Kraken: '+e.message); return null; }
 }
 
-// Fetch stock prices via allorigins proxy (CORS fix)
+// Fetch stock prices — równolegle dla szybkości
 async function fetchStockPrices() {
   const stocks = ['MCD','KO','MU','GOOGL','MSTR','CVNA','AVGO','LLY','VST','JPM','PLTR','NVDA'];
   const results = {};
-  for (const sym of stocks) {
+  const fetchOne = async (sym) => {
     try {
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
       const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-      const r = await fetch(proxy);
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 6000);
+      const r = await fetch(proxy, {signal: controller.signal});
       const d = await r.json();
       const parsed = JSON.parse(d.contents);
       const price = parsed?.chart?.result?.[0]?.meta?.regularMarketPrice;
       const prev = parsed?.chart?.result?.[0]?.meta?.chartPreviousClose;
       if (price) results[sym] = { price, change: prev?((price-prev)/prev*100):0 };
     } catch{}
-  }
+  };
+  await Promise.allSettled(stocks.map(fetchOne));
   return results;
 }
 
@@ -1390,19 +1393,22 @@ async function fetchTrustWalletETH() {
   ];
   for (const rpc of rpcs) {
     try {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 4000);
       const r = await fetch(rpc, {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({jsonrpc:'2.0',method:'eth_getBalance',params:[address,'latest'],id:1})
+        body: JSON.stringify({jsonrpc:'2.0',method:'eth_getBalance',params:[address,'latest'],id:1}),
+        signal: controller.signal
       });
       const d = await r.json();
       if (d.result) {
         const eth = parseInt(d.result, 16) / 1e18;
-        if (eth >= 0) return Math.round(eth * 10000) / 10000;
+        if (eth > 0) return Math.round(eth * 1000000) / 1000000;
       }
     } catch {}
   }
-  return 10;
+  return 11.318423; // fallback — aktualne saldo
 }
 
 // ===== MAIN LOAD =====
