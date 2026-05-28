@@ -716,19 +716,12 @@ async function fetchFX() {
 }
 async function fetchGold() {
   try {
-    // Używamy frankfurter jako backup lub goldprice.org
-    const r = await fetch('https://data-asg.goldprice.org/dbXRates/USD', {signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined});
+    // Używamy frankfurter.app — zawsze działa z CORS
+    const r = await fetch('https://api.frankfurter.app/latest?from=XAU&to=USD');
     const d = await r.json();
-    GOLD_USD = d?.items?.[0]?.xauPrice || 3300;
+    GOLD_USD = d?.rates?.USD || 3300;
   } catch {
-    try {
-      // Drugi fallback — metals-api przez corsproxy
-      const r2 = await fetch('https://corsproxy.io/?https://api.metals.live/v1/spot/gold');
-      const d2 = await r2.json();
-      GOLD_USD = d2[0]?.price || 3300;
-    } catch {
-      GOLD_USD = 3300;
-    }
+    GOLD_USD = 3300;
   }
 }
 async function fetchCrypto() {
