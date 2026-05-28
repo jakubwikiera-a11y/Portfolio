@@ -715,7 +715,21 @@ async function fetchFX() {
   try { const r=await fetch('https://api.exchangerate-api.com/v4/latest/USD'); const d=await r.json(); FX={PLN:d.rates.PLN||3.64,EUR:d.rates.EUR||0.917,GBP:d.rates.GBP||0.743}; } catch{}
 }
 async function fetchGold() {
-  try { const r=await fetch('https://api.metals.live/v1/spot/gold'); const d=await r.json(); GOLD_USD=d[0]?.price||3300; } catch{GOLD_USD=3300;}
+  try {
+    // Używamy frankfurter jako backup lub goldprice.org
+    const r = await fetch('https://data-asg.goldprice.org/dbXRates/USD', {signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined});
+    const d = await r.json();
+    GOLD_USD = d?.items?.[0]?.xauPrice || 3300;
+  } catch {
+    try {
+      // Drugi fallback — metals-api przez corsproxy
+      const r2 = await fetch('https://corsproxy.io/?https://api.metals.live/v1/spot/gold');
+      const d2 = await r2.json();
+      GOLD_USD = d2[0]?.price || 3300;
+    } catch {
+      GOLD_USD = 3300;
+    }
+  }
 }
 async function fetchCrypto() {
   try {
@@ -745,6 +759,7 @@ async function fetchKraken() {
     const sb64=btoa(String.fromCharCode(...new Uint8Array(sig)));
     const r=await fetch('https://api.kraken.com'+path,{method:'POST',headers:{'API-Key':k,'API-Sign':sb64,'Content-Type':'application/x-www-form-urlencoded'},body});
     const d=await r.json();
+    console.log('Kraken balances:', JSON.stringify(d.result));
     return d.result||null;
   } catch(e){ showToast('Kraken: '+e.message); return null; }
 }
