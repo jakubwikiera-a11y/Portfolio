@@ -601,6 +601,8 @@ body {
         <div class="s-input-row"><input class="s-input" id="s_etf_eur" type="number" value="63901"><span class="s-unit">EUR</span></div></div>
       <div class="s-row"><div class="s-label">Portfel XTB PLN — GPW (Orlen, PKO...)</div>
         <div class="s-input-row"><input class="s-input" id="s_xtb_pln" type="number" value="3958"><span class="s-unit">PLN</span></div></div>
+      <div class="s-row"><div class="s-label">Trust Wallet — ETH</div>
+        <div class="s-input-row"><input class="s-input" id="s_tw_eth" type="number" step="0.000001" value="11.318423"><span class="s-unit">ETH</span></div></div>
     </div>
     <div class="settings-section">
       <div class="s-section-title">⬇ Pasywa</div>
@@ -695,6 +697,8 @@ function saveSettings() {
   const s=document.getElementById('s_ksec').value.trim();
   if(k) localStorage.setItem('kKey',k);
   if(s&&!s.includes('•')) localStorage.setItem('kSec',s);
+  const twEth = document.getElementById('s_tw_eth')?.value;
+  if(twEth) localStorage.setItem('twEth', twEth);
   showToast('✓ Zapisano');
   setTimeout(loadAll,300);
 }
@@ -703,6 +707,7 @@ function loadSettings() {
   if(saved) { try { const c=JSON.parse(saved); Object.entries(c).forEach(([k,v])=>{ const el=document.getElementById('s_'+k); if(el) el.value=v; }); } catch{} }
   if(localStorage.getItem('kKey')) document.getElementById('s_kkey').value=localStorage.getItem('kKey');
   if(localStorage.getItem('kSec')) document.getElementById('s_ksec').value='••••••••';
+  if(localStorage.getItem('twEth')) document.getElementById('s_tw_eth').value=localStorage.getItem('twEth');
 }
 
 // ===== API =====
@@ -1385,30 +1390,8 @@ function renderETF() {
 }
 
 async function fetchTrustWalletETH() {
-  const address = '0x7e029ffb62d688e4615bff6a38a566d44537bcf4';
-  const rpcs = [
-    'https://cloudflare-eth.com',
-    'https://rpc.ankr.com/eth',
-    'https://eth.llamarpc.com',
-  ];
-  for (const rpc of rpcs) {
-    try {
-      const controller = new AbortController();
-      setTimeout(() => controller.abort(), 4000);
-      const r = await fetch(rpc, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({jsonrpc:'2.0',method:'eth_getBalance',params:[address,'latest'],id:1}),
-        signal: controller.signal
-      });
-      const d = await r.json();
-      if (d.result) {
-        const eth = parseInt(d.result, 16) / 1e18;
-        if (eth > 0) return Math.round(eth * 1000000) / 1000000;
-      }
-    } catch {}
-  }
-  return 11.318423; // fallback — aktualne saldo
+  // RPC nodes blokują CORS z przeglądarki — używamy wartości z ustawień
+  return parseFloat(localStorage.getItem('twEth') || '11.318423');
 }
 
 // ===== MAIN LOAD =====
