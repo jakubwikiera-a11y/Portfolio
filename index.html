@@ -744,20 +744,20 @@ async function fetchKraken() {
   } catch(e){ showToast('Kraken: '+e.message); return null; }
 }
 
-// Fetch stock price from Kraken for stocks (fallback: use manual)
+// Fetch stock prices via allorigins proxy (CORS fix)
 async function fetchStockPrices() {
-  // Using Yahoo Finance public endpoint via allorigins proxy
-  const stocks = ['MCD','KO','MU','GOOGL','MSTR','CVNA','AVGO','LLY','VST','JPM','PLTR','NVDA','BTBT'];
+  const stocks = ['MCD','KO','MU','GOOGL','MSTR','CVNA','AVGO','LLY','VST','JPM','PLTR','NVDA'];
   const results = {};
   for (const sym of stocks) {
     try {
-      const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`);
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
+      const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      const r = await fetch(proxy);
       const d = await r.json();
-      const price = d?.chart?.result?.[0]?.meta?.regularMarketPrice;
-      const prev = d?.chart?.result?.[0]?.meta?.chartPreviousClose;
-      if (price) {
-        results[sym] = { price, change: prev ? ((price-prev)/prev*100) : 0, prev };
-      }
+      const parsed = JSON.parse(d.contents);
+      const price = parsed?.chart?.result?.[0]?.meta?.regularMarketPrice;
+      const prev = parsed?.chart?.result?.[0]?.meta?.chartPreviousClose;
+      if (price) results[sym] = { price, change: prev?((price-prev)/prev*100):0 };
     } catch{}
   }
   return results;
@@ -1383,23 +1383,26 @@ function renderETF() {
 
 async function fetchTrustWalletETH() {
   const address = '0x7e029ffb62d688e4615bff6a38a566d44537bcf4';
-  try {
-    const r = await fetch(`https://api.etherscan.io/api?module=account&action=balance&address=${address}&tag=latest&apikey=YourApiKeyToken`);
-    const d = await r.json();
-    if (d.status === '1') {
-      return parseFloat(d.result) / 1e18; // Wei → ETH
-    }
-    // Fallback — próbuj przez cloudflare-eth
-    const r2 = await fetch(`https://eth.llamarpc.com`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({jsonrpc:'2.0',method:'eth_getBalance',params:[address,'latest'],id:1})
-    });
-    const d2 = await r2.json();
-    return parseInt(d2.result, 16) / 1e18;
-  } catch {
-    return 10; // fallback domyślny
+  const rpcs = [
+    'https://cloudflare-eth.com',
+    'https://rpc.ankr.com/eth',
+    'https://eth.llamarpc.com',
+  ];
+  for (const rpc of rpcs) {
+    try {
+      const r = await fetch(rpc, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({jsonrpc:'2.0',method:'eth_getBalance',params:[address,'latest'],id:1})
+      });
+      const d = await r.json();
+      if (d.result) {
+        const eth = parseInt(d.result, 16) / 1e18;
+        if (eth >= 0) return Math.round(eth * 10000) / 10000;
+      }
+    } catch {}
   }
+  return 10;
 }
 
 // ===== MAIN LOAD =====
