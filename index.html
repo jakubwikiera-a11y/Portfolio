@@ -816,6 +816,15 @@ function buildGroups(cfg, kb) {
   if(cfg.paxg>0) addTo('🔷 Krypto','#8b5cf6',`PAX Gold (${cfg.paxg} PAXG)`,cfg.paxg*PRICES.PAXG,`${fmt(PRICES.PAXG)}/oz`);
   if(cfg.render>0) addTo('🔷 Krypto','#8b5cf6',`Render (${cfg.render.toFixed(0)} RNDR)`,cfg.render*PRICES.RENDER,`$${PRICES.RENDER.toFixed(3)}/RNDR`,'Cel: $4.00');
   if(cfg.op>0) addTo('🔷 Krypto','#8b5cf6',`Optimism (${cfg.op.toFixed(0)} OP)`,cfg.op*PRICES.OP,`$${PRICES.OP.toFixed(4)}/OP`);
+
+  // Gotówka Kraken (ZUSD + USDT + USDC)
+  const krakenUSD = kb ? (
+    parseFloat(kb.ZUSD||0) +
+    parseFloat(kb.USDT||0) +
+    parseFloat(kb.USDC||0) +
+    parseFloat(kb.USDG||0)
+  ) : 0;
+  if(krakenUSD > 1) addTo('🔷 Krypto','#8b5cf6',`Gotówka Kraken ($${Math.round(krakenUSD).toLocaleString('pl-PL')})`,krakenUSD,`USD · wolne środki na Kraken`,'Stablecoiny');
   // Złoto
   const oz=cfg.gold*32.1507;
   addTo('🥇 Złoto','#d97706',`Złoto fizyczne (${cfg.gold} kg)`,oz*GOLD_USD,`$${GOLD_USD.toFixed(0)}/oz · ${oz.toFixed(2)} oz`);
