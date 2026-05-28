@@ -749,10 +749,25 @@ async function fetchKraken() {
   } catch(e){ showToast('Kraken: '+e.message); return null; }
 }
 
-// Fetch stock prices — równolegle dla szybkości
+// Fetch stock prices — z fallback na ostatnie znane ceny
+const FALLBACK_PRICES = {
+  MCD:  { price: 282.30, change: -2.09 },
+  KO:   { price: 82.43,  change: 0.50  },
+  MU:   { price: 891.63, change: 1.20  },
+  GOOGL:{ price: 390.36, change: 0.80  },
+  MSTR: { price: 155.87, change: -1.20 },
+  CVNA: { price: 71.30,  change: 1.50  },
+  AVGO: { price: 418.48, change: 0.60  },
+  LLY:  { price: 1083.57,change: 0.90  },
+  VST:  { price: 159.95, change: 0.70  },
+  JPM:  { price: 297.90, change: -0.25 },
+  PLTR: { price: 133.83, change: -1.96 },
+  NVDA: { price: 209.12, change: -1.82 },
+};
+
 async function fetchStockPrices() {
-  const stocks = ['MCD','KO','MU','GOOGL','MSTR','CVNA','AVGO','LLY','VST','JPM','PLTR','NVDA'];
-  const results = {};
+  const stocks = Object.keys(FALLBACK_PRICES);
+  const results = {...FALLBACK_PRICES}; // start z fallback
   const proxies = [
     sym => `https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`)}`,
     sym => `https://api.allorigins.win/get?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`)}`,
@@ -764,7 +779,7 @@ async function fetchStockPrices() {
         setTimeout(() => controller.abort(), 6000);
         const r = await fetch(proxyFn(sym), {signal: controller.signal});
         const text = await r.text();
-        const parsed = JSON.parse(text.startsWith('{\"contents\"') ? JSON.parse(text).contents : text);
+        const parsed = JSON.parse(text.startsWith('{"contents"') ? JSON.parse(text).contents : text);
         const price = parsed?.chart?.result?.[0]?.meta?.regularMarketPrice;
         const prev = parsed?.chart?.result?.[0]?.meta?.chartPreviousClose;
         if (price) { results[sym] = { price, change: prev?((price-prev)/prev*100):0 }; return; }
