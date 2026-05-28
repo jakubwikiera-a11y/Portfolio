@@ -753,19 +753,23 @@ async function fetchKraken() {
 async function fetchStockPrices() {
   const stocks = ['MCD','KO','MU','GOOGL','MSTR','CVNA','AVGO','LLY','VST','JPM','PLTR','NVDA'];
   const results = {};
+  const proxies = [
+    sym => `https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`)}`,
+    sym => `https://api.allorigins.win/get?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`)}`,
+  ];
   const fetchOne = async (sym) => {
-    try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
-      const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-      const controller = new AbortController();
-      setTimeout(() => controller.abort(), 6000);
-      const r = await fetch(proxy, {signal: controller.signal});
-      const d = await r.json();
-      const parsed = JSON.parse(d.contents);
-      const price = parsed?.chart?.result?.[0]?.meta?.regularMarketPrice;
-      const prev = parsed?.chart?.result?.[0]?.meta?.chartPreviousClose;
-      if (price) results[sym] = { price, change: prev?((price-prev)/prev*100):0 };
-    } catch{}
+    for (const proxyFn of proxies) {
+      try {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 6000);
+        const r = await fetch(proxyFn(sym), {signal: controller.signal});
+        const text = await r.text();
+        const parsed = JSON.parse(text.startsWith('{\"contents\"') ? JSON.parse(text).contents : text);
+        const price = parsed?.chart?.result?.[0]?.meta?.regularMarketPrice;
+        const prev = parsed?.chart?.result?.[0]?.meta?.chartPreviousClose;
+        if (price) { results[sym] = { price, change: prev?((price-prev)/prev*100):0 }; return; }
+      } catch{}
+    }
   };
   await Promise.allSettled(stocks.map(fetchOne));
   return results;
