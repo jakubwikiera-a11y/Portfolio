@@ -604,6 +604,8 @@ body {
         <div class="s-input-row"><input class="s-input" id="s_xtb_pln" type="number" value="3958"><span class="s-unit">PLN</span></div></div>
       <div class="s-row"><div class="s-label">Trust Wallet — ETH</div>
         <div class="s-input-row"><input class="s-input" id="s_tw_eth" type="number" step="0.000001" value="11.318423"><span class="s-unit">ETH</span></div></div>
+      <div class="s-row"><div class="s-label">Gotówka Kraken (USD/USDT/USDC)</div>
+        <div class="s-input-row"><input class="s-input" id="s_kraken_cash" type="number" value="35087.91"><span class="s-unit">USD</span></div></div>
     </div>
     <div class="settings-section">
       <div class="s-section-title">⬇ Pasywa</div>
@@ -614,6 +616,8 @@ body {
     </div>
     <div class="settings-section">
       <div class="s-section-title">🔑 Kraken API</div>
+      <div class="s-row"><div class="s-label">Backend URL (Vercel)</div>
+        <input class="s-input" id="s_backend" type="text" placeholder="https://twoja-nazwa.vercel.app" value=""></div>
       <div class="s-row"><div class="s-label">API Key</div>
         <input class="s-input" id="s_kkey" type="text" placeholder="Wklej API Key..."></div>
       <div class="s-row"><div class="s-label">API Secret</div>
@@ -688,6 +692,7 @@ function getCfg() {
     xtb_total:getNum('s_xtb',135786.44),
     etf_eur:getNum('s_etf_eur',63901),
     xtb_pln:getNum('s_xtb_pln',3958),
+    kraken_cash:getNum('s_kraken_cash',35087.91),
     oszcz:getNum('s_oszcz',0),
   };
 }
@@ -696,6 +701,8 @@ function saveSettings() {
   localStorage.setItem('pCfg',JSON.stringify(cfg));
   const k=document.getElementById('s_kkey').value.trim();
   const s=document.getElementById('s_ksec').value.trim();
+  const backend = document.getElementById('s_backend')?.value.trim();
+  if (backend) localStorage.setItem('backendUrl', backend);
   if(k) localStorage.setItem('kKey',k);
   if(s&&!s.includes('•')) localStorage.setItem('kSec',s);
   const twEth = document.getElementById('s_tw_eth')?.value;
@@ -706,60 +713,71 @@ function saveSettings() {
 function loadSettings() {
   const saved=localStorage.getItem('pCfg');
   if(saved) { try { const c=JSON.parse(saved); Object.entries(c).forEach(([k,v])=>{ const el=document.getElementById('s_'+k); if(el) el.value=v; }); } catch{} }
+  if(localStorage.getItem('backendUrl')) document.getElementById('s_backend').value=localStorage.getItem('backendUrl');
   if(localStorage.getItem('kKey')) document.getElementById('s_kkey').value=localStorage.getItem('kKey');
   if(localStorage.getItem('kSec')) document.getElementById('s_ksec').value='••••••••';
   if(localStorage.getItem('twEth')) document.getElementById('s_tw_eth').value=localStorage.getItem('twEth');
 }
 
+// ===== BACKEND URL =====
+const API = localStorage.getItem('backendUrl') || 'https://portfolio-backend.vercel.app';
+
 // ===== API =====
 async function fetchFX() {
-  try { const r=await fetch('https://api.exchangerate-api.com/v4/latest/USD'); const d=await r.json(); FX={PLN:d.rates.PLN||3.64,EUR:d.rates.EUR||0.917,GBP:d.rates.GBP||0.743}; } catch{}
+  try {
+    const r = await fetch(`${API}/api/data?type=fx`);
+    const d = await r.json();
+    if (d.ok) FX = { PLN: d.rates.PLN||3.64, EUR: d.rates.EUR||0.917, GBP: d.rates.GBP||0.743 };
+  } catch {}
 }
 async function fetchGold() {
   try {
-    // Używamy frankfurter.app — zawsze działa z CORS
-    const r = await fetch('https://api.frankfurter.app/latest?from=XAU&to=USD');
+    const r = await fetch(`${API}/api/data?type=gold`);
     const d = await r.json();
-    GOLD_USD = d?.rates?.USD || 3300;
-  } catch {
-    GOLD_USD = 3300;
-  }
+    if (d.ok) GOLD_USD = d.price;
+  } catch { GOLD_USD = 3300; }
 }
 async function fetchCrypto() {
   try {
-    const r=await fetch('https://api.kraken.com/0/public/Ticker?pair=XXBTZUSD,XETHZUSD,RENDERUSD,OPUSD,SOLUSD,PAXGUSD');
-    const d=await r.json(); const p=d.result||{};
-    PRICES={
-      BTC:parseFloat(p['XXBTZUSD']?.c[0])||75225,
-      ETH:parseFloat(p['XETHZUSD']?.c[0])||2071,
-      RENDER:parseFloat(p['RENDERUSD']?.c[0])||2.25,
-      OP:parseFloat(p['OPUSD']?.c[0])||0.13,
-      SOL:parseFloat(p['SOLUSD']?.c[0])||84,
-      PAXG:parseFloat(p['PAXGUSD']?.c[0])||GOLD_USD,
-    };
-  } catch{}
+    const r = await fetch(`${API}/api/data?type=prices`);
+    const d = await r.json();
+    if (d.ok) {
+      const p = d.data;
+      PRICES = {
+        BTC: parseFloat(p['XXBTZUSD']?.c[0]) || 75225,
+        ETH: parseFloat(p['XETHZUSD']?.c[0]) || 2071,
+        RENDER: parseFloat(p['RENDERUSD']?.c[0]) || 2.25,
+        OP: parseFloat(p['OPUSD']?.c[0]) || 0.13,
+        SOL: parseFloat(p['SOLUSD']?.c[0]) || 84,
+        PAXG: parseFloat(p['PAXGUSD']?.c[0]) || GOLD_USD,
+      };
+    }
+  } catch {}
 }
 async function fetchKraken() {
-  const k=localStorage.getItem('kKey')||'', s=localStorage.getItem('kSec')||'';
-  if(!k||!s) return null;
+  const k = localStorage.getItem('kKey') || '';
+  const s = localStorage.getItem('kSec') || '';
+  if (!k || !s) return null;
   try {
-    const nonce=Date.now().toString(), path='/0/private/Balance', body='nonce='+nonce;
-    const enc=new TextEncoder();
-    const sk=Uint8Array.from(atob(s),c=>c.charCodeAt(0));
-    const ck=await crypto.subtle.importKey('raw',sk,{name:'HMAC',hash:'SHA-512'},false,['sign']);
-    const sh=await crypto.subtle.digest('SHA-256',enc.encode(nonce+body));
-    const msg=new Uint8Array([...enc.encode(path),...new Uint8Array(sh)]);
-    const sig=await crypto.subtle.sign('HMAC',ck,msg);
-    const sb64=btoa(String.fromCharCode(...new Uint8Array(sig)));
-    const r=await fetch('https://corsproxy.io/?https://api.kraken.com'+path,{method:'POST',headers:{'API-Key':k,'API-Sign':sb64,'Content-Type':'application/x-www-form-urlencoded'},body});
-    const d=await r.json();
-    console.log('Kraken balances:', JSON.stringify(d.result));
-    window._krakenBal = d.result;
-    // Debug — pokaż na ekranie
-    const dbg = document.getElementById('krakenDebug');
-    if(dbg) { dbg.textContent = 'Kraken: ' + JSON.stringify(d.result); dbg.style.display='block'; }
-    return d.result||null;
-  } catch(e){ showToast('Kraken: '+e.message); return null; }
+    const r = await fetch(`${API}/api/data?type=balance&apiKey=${encodeURIComponent(k)}&apiSecret=${encodeURIComponent(s)}`);
+    const d = await r.json();
+    if (d.ok) {
+      console.log('Kraken balances:', JSON.stringify(d.data));
+      window._krakenBal = d.data;
+      const dbg = document.getElementById('krakenDebug');
+      if (dbg) { dbg.textContent = 'Kraken: ' + JSON.stringify(d.data); dbg.style.display = 'block'; }
+      return d.data;
+    }
+    showToast('Kraken: ' + d.error, true);
+    return null;
+  } catch (e) { showToast('Kraken: ' + e.message); return null; }
+}
+async function fetchTrustWalletETH() {
+  try {
+    const r = await fetch(`${API}/api/data?type=eth_balance`);
+    const d = await r.json();
+    return d.eth || 11.318423;
+  } catch { return 11.318423; }
 }
 
 // Fetch stock prices — z fallback na ostatnie znane ceny
@@ -779,28 +797,12 @@ const FALLBACK_PRICES = {
 };
 
 async function fetchStockPrices() {
-  const stocks = Object.keys(FALLBACK_PRICES);
-  const results = {...FALLBACK_PRICES}; // start z fallback
-  const proxies = [
-    sym => `https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`)}`,
-    sym => `https://api.allorigins.win/get?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`)}`,
-  ];
-  const fetchOne = async (sym) => {
-    for (const proxyFn of proxies) {
-      try {
-        const controller = new AbortController();
-        setTimeout(() => controller.abort(), 6000);
-        const r = await fetch(proxyFn(sym), {signal: controller.signal});
-        const text = await r.text();
-        const parsed = JSON.parse(text.startsWith('{"contents"') ? JSON.parse(text).contents : text);
-        const price = parsed?.chart?.result?.[0]?.meta?.regularMarketPrice;
-        const prev = parsed?.chart?.result?.[0]?.meta?.chartPreviousClose;
-        if (price) { results[sym] = { price, change: prev?((price-prev)/prev*100):0 }; return; }
-      } catch{}
-    }
-  };
-  await Promise.allSettled(stocks.map(fetchOne));
-  return results;
+  try {
+    const r = await fetch(`${API}/api/data?type=stocks`);
+    const d = await r.json();
+    if (d.ok && Object.keys(d.data).length > 0) return { ...FALLBACK_PRICES, ...d.data };
+  } catch {}
+  return FALLBACK_PRICES;
 }
 
 // ===== BUILD ASSETS =====
@@ -815,13 +817,22 @@ function buildGroups(cfg, kb) {
   addTo('🏠 Nieruchomości','#0ea5e9','Mieszkanie Dzielna 62',cfg.m1/FX.PLN,(cfg.m1/1000).toFixed(0)+'k PLN');
   addTo('🏠 Nieruchomości','#0ea5e9','Mieszkanie Rakowicka (wynajem)',cfg.m2/FX.PLN,(cfg.m2/1000).toFixed(0)+'k PLN · wynajem 2 950 PLN/mc');
   addTo('🏠 Nieruchomości','#0ea5e9','Mieszkanie cioci',cfg.m3/FX.PLN,(cfg.m3/1000).toFixed(0)+'k PLN · Kraków');
-  // BTC
-  const btcK=kb?parseFloat(kb.XXBT||kb.XBT||0):4.2031;
+  // BTC — sumuj XXBT + XBT.B + XBT.M (staking)
+  const btcK = kb ? (
+    parseFloat(kb['XXBT'] || 0) +
+    parseFloat(kb['XBT.B'] || 0) +
+    parseFloat(kb['XBT.M'] || 0) +
+    parseFloat(kb['XBT.S'] || 0)
+  ) : 4.3041;
   const btcT=btcK+cfg.btc_e;
   addTo('₿ Bitcoin','#f59e0b',`Bitcoin (${btcT.toFixed(4)} BTC)`,btcT*PRICES.BTC,`${fmt(PRICES.BTC)}/BTC · Kraken ${btcK.toFixed(4)} + inne ${cfg.btc_e}`,`${cfg.btc_s} BTC zastaw`);
-  // Krypto
-  const ethA=kb?parseFloat(kb.XETH||0):10.71329;
-  addTo('🔷 Krypto','#8b5cf6',`Ethereum Kraken (${ethA.toFixed(2)} ETH)`,ethA*PRICES.ETH,`${fmt(PRICES.ETH)}/ETH · Kraken`);
+  // ETH — sumuj XETH + ETH.B
+  const ethA = kb ? (
+    parseFloat(kb['XETH'] || 0) +
+    parseFloat(kb['ETH.B'] || 0) +
+    parseFloat(kb['ETH.S'] || 0)
+  ) : 10.71329;
+  addTo('🔷 Krypto','#8b5cf6',`Ethereum Kraken (${ethA.toFixed(4)} ETH)`,ethA*PRICES.ETH,`${fmt(PRICES.ETH)}/ETH · Kraken`);
 
   // Trust Wallet ETH
   const twEth = window._twEth || 10;
@@ -830,14 +841,11 @@ function buildGroups(cfg, kb) {
   if(cfg.render>0) addTo('🔷 Krypto','#8b5cf6',`Render (${cfg.render.toFixed(0)} RNDR)`,cfg.render*PRICES.RENDER,`$${PRICES.RENDER.toFixed(3)}/RNDR`,'Cel: $4.00');
   if(cfg.op>0) addTo('🔷 Krypto','#8b5cf6',`Optimism (${cfg.op.toFixed(0)} OP)`,cfg.op*PRICES.OP,`$${PRICES.OP.toFixed(4)}/OP`);
 
-  // Gotówka Kraken (ZUSD + USDT + USDC)
-  const krakenUSD = kb ? (
-    parseFloat(kb.ZUSD||0) +
-    parseFloat(kb.USDT||0) +
-    parseFloat(kb.USDC||0) +
-    parseFloat(kb.USDG||0)
-  ) : 0;
-  if(krakenUSD > 1) addTo('🔷 Krypto','#8b5cf6',`Gotówka Kraken ($${Math.round(krakenUSD).toLocaleString('pl-PL')})`,krakenUSD,`USD · wolne środki na Kraken`,'Stablecoiny');
+  // Gotówka Kraken — z API lub ręczna
+  const krakenCash = kb ? (
+    parseFloat(kb.ZUSD||0) + parseFloat(kb.USDC||0) + parseFloat(kb.USDG||0)
+  ) : (cfg.kraken_cash || 0);
+  if(krakenCash > 1) addTo('🔷 Krypto','#8b5cf6',`Gotówka Kraken ($${Math.round(krakenCash).toLocaleString('pl-PL')})`,krakenCash,`USD · stablecoiny i gotówka na Kraken`,'Auto');
   // Złoto
   const oz=cfg.gold*32.1507;
   addTo('🥇 Złoto','#d97706',`Złoto fizyczne (${cfg.gold} kg)`,oz*GOLD_USD,`$${GOLD_USD.toFixed(0)}/oz · ${oz.toFixed(2)} oz`);
