@@ -459,6 +459,7 @@ body {
     <div class="scenario-header"><div class="scenario-title">🔮 Scenariusze BTC</div></div>
     <div id="scenarioRows"></div>
   </div>
+  <div id="krakenDebug" style="margin:8px 16px;padding:8px;background:#fff3cd;border-radius:8px;font-size:10px;color:#333;word-break:break-all;display:none"></div>
   <div style="height:16px"></div>
 </div>
 
@@ -753,6 +754,10 @@ async function fetchKraken() {
     const r=await fetch('https://api.kraken.com'+path,{method:'POST',headers:{'API-Key':k,'API-Sign':sb64,'Content-Type':'application/x-www-form-urlencoded'},body});
     const d=await r.json();
     console.log('Kraken balances:', JSON.stringify(d.result));
+    window._krakenBal = d.result;
+    // Debug — pokaż na ekranie
+    const dbg = document.getElementById('krakenDebug');
+    if(dbg) { dbg.textContent = 'Kraken: ' + JSON.stringify(d.result); dbg.style.display='block'; }
     return d.result||null;
   } catch(e){ showToast('Kraken: '+e.message); return null; }
 }
